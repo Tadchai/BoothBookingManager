@@ -19,11 +19,10 @@ $app->add(function ($request, $handler) {
 // รวมไฟล์ routes
 (require __DIR__ . '/../routes/auth.php')($app);
 (require __DIR__ . '/../routes/zones.php')($app);
-// (require __DIR__ . '/../routes/booths.php')($app);
-// (require __DIR__ . '/../routes/bookings.php')($app);
-// (require __DIR__ . '/../routes/payments.php')($app);
-// (require __DIR__ . '/../routes/admin.php')($app);
-
+(require __DIR__ . '/../routes/booths.php')($app);
+(require __DIR__ . '/../routes/bookings.php')($app);
+(require __DIR__ . '/../routes/payments.php')($app);
+(require __DIR__ . '/../routes/admin.php')($app);
 
 $app->addErrorMiddleware(true, true, true);
 

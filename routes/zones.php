@@ -5,19 +5,20 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Illuminate\Database\Capsule\Manager as DB;
 
 require_once __DIR__ . '/../middleware/AuthMiddleware.php';
+require_once __DIR__ . '/../middleware/AdminMiddleware.php';
 
 return function (App $app) {
     $auth = new AuthMiddleware();
     $admin = new AdminMiddleware();
 
-    // แสดงรายการโซนทั้งหมด
+    // Get all zones
     $app->get('/api/zones', function (Request $request, Response $response) {
         $zones = DB::table('zones')->get();
         $response->getBody()->write(json_encode($zones));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     })->add($auth);
 
-    // เพิ่มโซนใหม่ (Admin Only)
+    // Add a new zone (Admin Only)
     $app->post('/api/zones', function (Request $request, Response $response) {
         $data = $request->getParsedBody();
 
@@ -32,7 +33,7 @@ return function (App $app) {
         return $response->withHeader('Content-Type', 'application/json')->withStatus(201);
     })->add($auth)->add($admin);
 
-    // แก้ไขโซน (Admin Only)
+    // Update a zone (Admin Only)
     $app->put('/api/zones/{zone_id}', function (Request $request, Response $response, array $args) {
         $zoneId = $args['zone_id'];
         $data = $request->getParsedBody();
@@ -53,7 +54,7 @@ return function (App $app) {
         }
     })->add($auth)->add($admin);
 
-    // ลบโซน (Admin Only)
+    // Delete a zone (Admin Only)
     $app->delete('/api/zones/{zone_id}', function (Request $request, Response $response, array $args) {
         $zoneId = $args['zone_id'];
 
