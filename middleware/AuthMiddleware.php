@@ -1,41 +1,31 @@
 <?php
 
+use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Server\RequestHandlerInterface as Handler;
-use Psr\Http\Message\ResponseInterface as Response;
 use Firebase\JWT\JWT;
-use Firebase\JWT\Key;  // นำเข้า Key class
+use Firebase\JWT\Key;
 
-class AuthMiddleware
-{
-    public function __invoke(Request $request, Handler $handler): Response
-    {
+class AuthMiddleware {
+    public function __invoke(Request $request, Handler $handler): Response {
         $authHeader = $request->getHeader('Authorization');
 
-        // ตรวจสอบว่ามี Authorization header และตรงตามรูปแบบ Bearer token
-        if (!$authHeader || !preg_match('/Bearer\s(\S+)/', $authHeader[0], $matches)) {
+        if (!$authHeader) {
             $response = new \Slim\Psr7\Response();
-            $response->getBody()->write(json_encode(['error' => 'ไม่มีสิทธิ์เข้าถึง']));
+            $response->getBody()->write(json_encode(['error' => 'Authorization token not provided']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
         }
 
-        $token = $matches[1];
-        $secret = "your_jwt_secret_key";
+        $token = explode(" ", $authHeader[0])[1];
 
         try {
-            // ใช้ Key class เพื่อระบุคีย์และอัลกอริทึมในการถอดรหัส
-            $decoded = JWT::decode($token, new Key($secret, 'HS256'));
-
-            // เพิ่มข้อมูลผู้ใช้ลงใน request attribute
+            $decoded = JWT::decode($token, new Key('your_jwt_secret_key', 'HS256'));
             $request = $request->withAttribute('user', $decoded);
+            return $handler->handle($request);
         } catch (Exception $e) {
-            // ถ้าการถอดรหัส JWT ไม่สำเร็จ ให้ส่งข้อความแสดงข้อผิดพลาด
             $response = new \Slim\Psr7\Response();
-            $response->getBody()->write(json_encode(['error' => 'Token ไม่ถูกต้อง']));
+            $response->getBody()->write(json_encode(['error' => 'Invalid token']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
         }
-
-        // เรียก handler เพื่อดำเนินการต่อ
-        return $handler->handle($request);
     }
 }

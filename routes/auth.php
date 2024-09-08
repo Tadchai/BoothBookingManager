@@ -5,101 +5,90 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Illuminate\Database\Capsule\Manager as DB;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
-use Illuminate\Support\Facades\Hash;
+
+function generateToken($user) {
+    $key = 'your_secret_key'; // เปลี่ยนเป็นคีย์ลับของคุณ
+    $payload = [
+        'iss' => 'your_domain.com', // issuer
+        'aud' => 'your_domain.com', // audience
+        'iat' => time(), // issued at
+        'exp' => time() + (60 * 60), // expired (1 ชั่วโมง)
+        'userId' => $user['id'], // ข้อมูลผู้ใช้
+        'role' => $user['role'], // บทบาทผู้ใช้
+    ];
+
+    return JWT::encode($payload, $key, 'HS256');
+}
+
+function decodeToken($jwt) {
+    $key = 'your_secret_key'; // เปลี่ยนเป็นคีย์ลับของคุณ
+    try {
+        $decoded = JWT::decode($jwt, new Key($key, 'HS256'));
+        return (array) $decoded;
+    } catch (Exception $e) {
+        return null; // หากการถอดรหัสล้มเหลว
+    }
+}
 
 return function (App $app) {
-    $container = $app->getContainer();
+    // Login API
+    $app->post('/api/login', function (Request $request, Response $response) {
+        $data = $request->getParsedBody();
+        $conn = $GLOBALS['conn'];
+        $stmt = $conn->prepare("SELECT * FROM users WHERE email = ? AND password = ?");
+        $stmt->bind_param("ss", $data['email'], $data['password']);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $user = $result->fetch_assoc();
+    
+        if ($user) {
+            $token = generateToken($user); // เรียกใช้ฟังก์ชัน generateToken เพื่อสร้าง JWT
+            $response->getBody()->write(json_encode(['token' => $token]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        } else {
+            $response->getBody()->write(json_encode(['error' => 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+        }
+    });
 
-    // สมัครสมาชิก
     $app->post('/api/register', function (Request $request, Response $response) {
-        // ตรวจสอบว่า Content-Type เป็น application/json หรือไม่
+        $conn = $GLOBALS['conn'];
+    
         if (strpos($request->getHeaderLine('Content-Type'), 'application/json') === false) {
             $response->getBody()->write(json_encode(['error' => 'Content-Type ไม่ถูกต้อง']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
     
-        // ดึงข้อมูลดิบที่ส่งมา
         $rawData = $request->getBody()->getContents();
-        error_log($rawData); // บันทึกข้อมูลดิบลง log
-    
-        // แปลง JSON ดิบให้เป็น array
         $data = json_decode($rawData, true);
     
-        // ตรวจสอบว่าข้อมูลไม่ใช่ NULL
         if (is_null($data)) {
             $response->getBody()->write(json_encode(['error' => 'ไม่ได้รับข้อมูล']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
     
-        // พิมพ์ข้อมูลที่ได้รับออกมาเพื่อตรวจสอบ
-        error_log(print_r($data, true)); // บันทึกข้อมูลลง log
-    
-        // ตรวจสอบข้อมูลที่จำเป็น
         if (!isset($data['name'], $data['email'], $data['password'], $data['phone_number'])) {
             $response->getBody()->write(json_encode(['error' => 'ข้อมูลไม่ครบถ้วน']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
     
-        // ตรวจสอบว่าอีเมลมีอยู่แล้วหรือไม่
-        $user = DB::table('users')->where('email', $data['email'])->first();
-        if ($user) {
+        $stmt = $conn->prepare("SELECT * FROM users WHERE email = ?");
+        $stmt->bind_param("s", $data['email']);
+        $stmt->execute();
+        $result = $stmt->get_result();
+    
+        if ($result->num_rows > 0) {
             $response->getBody()->write(json_encode(['error' => 'อีเมลนี้ถูกใช้แล้ว']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
     
-        // เข้ารหัสรหัสผ่าน
         $passwordHash = password_hash($data['password'], PASSWORD_DEFAULT);
     
-        // สร้างผู้ใช้ใหม่
-        DB::table('users')->insert([
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'phone_number' => $data['phone_number'],
-            'password' => $passwordHash,
-            'role' => 'general',
-        ]);
+        $stmt = $conn->prepare("INSERT INTO users (name, email, phone_number, password, role) VALUES (?, ?, ?, ?, 'general')");
+        $stmt->bind_param("ssss", $data['name'], $data['email'], $data['phone_number'], $passwordHash);
+        $stmt->execute();
     
         $response->getBody()->write(json_encode(['message' => 'สมัครสมาชิกสำเร็จ']));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(201);
-    });
-    
-
-    // เข้าสู่ระบบ
-    $app->post('/api/login', function (Request $request, Response $response) {
-        $rawData = $request->getBody()->getContents();
-        error_log($rawData); // บันทึกข้อมูลดิบลง log
-    
-        // แปลง JSON ดิบให้เป็น array
-        $data = json_decode($rawData, true);
-
-        // ตรวจสอบข้อมูลที่จำเป็น
-        if (!isset($data['email'], $data['password'])) {
-            $response->getBody()->write(json_encode(['error' => 'ข้อมูลไม่ครบถ้วน']));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
-        }
-
-        // ค้นหาผู้ใช้
-        $user = DB::table('users')->where('email', $data['email'])->first();
-
-        if (!$user || !password_verify($data['password'], $user->password)) {
-            $response->getBody()->write(json_encode(['error' => 'อีเมลหรือรหัสผ่านไม่ถูกต้อง']));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
-        }
-
-        // สร้าง JWT Token
-        $now = new DateTime();
-        $future = new DateTime("now +2 hours");
-        $payload = [
-            "iat" => $now->getTimeStamp(),
-            "exp" => $future->getTimeStamp(),
-            "sub" => $user->id,
-            "role" => $user->role,
-        ];
-
-        $secret = "your_jwt_secret_key"; // ควรเก็บไว้ในไฟล์ .env หรือการตั้งค่าที่ปลอดภัย
-        $token = JWT::encode($payload, $secret, "HS256");
-
-        $response->getBody()->write(json_encode(['token' => $token, 'user' => $user]));
-        return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
-    });
+});
 };

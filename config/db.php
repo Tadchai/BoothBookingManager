@@ -1,18 +1,10 @@
 <?php
-use Illuminate\Database\Capsule\Manager as Capsule;
+    $servername = '151.106.124.154';
+    $username = 'u583789277_wag11';
+    $password = 'Locate2567';
+    $dbname = 'u583789277_wag11';
 
-$capsule = new Capsule;
-
-$capsule->addConnection([
-    'driver'    => 'mysql',
-    'host'      => 'localhost',
-    'database'  => 'booth_booking_system',
-    'username'  => 'root',
-    'password'  => 'TadPhi@2276',
-    'charset'   => 'utf8',
-    'collation' => 'utf8_unicode_ci',
-    'prefix'    => '',
-]);
-
-$capsule->setAsGlobal();
-$capsule->bootEloquent();
+    $conn = new mysqli($servername, $username, $password, $dbname);
+    $conn->set_charset("utf8");
+    
+?>

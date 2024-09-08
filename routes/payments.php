@@ -4,36 +4,31 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Message\ResponseInterface as Response;
 use Illuminate\Database\Capsule\Manager as DB;
 
-require_once __DIR__ . '/../middleware/AuthMiddleware.php';
-require_once __DIR__ . '/../middleware/AdminMiddleware.php';
-
 return function (App $app) {
     $auth = new AuthMiddleware();
+    $admin = new AdminMiddleware();
 
-    // Get all payments for a user
+    // Get all payments
     $app->get('/api/payments', function (Request $request, Response $response) {
-        $user = $request->getAttribute('user');
-
-        $payments = DB::table('payments')
-            ->where('user_id', $user->id)
-            ->get();
-
-        $response->getBody()->write(json_encode($payments));
+        $conn = $GLOBALS['conn'];
+        $sql = 'SELECT * FROM payments';
+        $result = $conn->query($sql);
+        $data = array();
+        while ($row = $result->fetch_assoc()) {
+            array_push($data, $row);
+        }
+        $response->getBody()->write(json_encode($data));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     })->add($auth);
 
-    // Add a new payment
+    // Add a new payment (User Only)
     $app->post('/api/payments', function (Request $request, Response $response) {
-        $user = $request->getAttribute('user');
         $data = $request->getParsedBody();
-
-        $paymentId = DB::table('payments')->insertGetId([
-            'user_id' => $user->id,
-            'booking_id' => $data['booking_id'],
-            'amount' => $data['amount'],
-            'payment_date' => $data['payment_date'],
-            'status' => 'completed',
-        ]);
+        $conn = $GLOBALS['conn'];
+        $stmt = $conn->prepare("INSERT INTO payments (user_id, booking_id, payment_amount, payment_date) VALUES (?, ?, ?, ?)");
+        $stmt->bind_param("iiis", $data['user_id'], $data['booking_id'], $data['payment_amount'], $data['payment_date']);
+        $stmt->execute();
+        $paymentId = $stmt->insert_id;
 
         $response->getBody()->write(json_encode(['message' => 'ชำระเงินสำเร็จ', 'payment_id' => $paymentId]));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(201);

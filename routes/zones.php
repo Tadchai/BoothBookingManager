@@ -1,7 +1,7 @@
 <?php
 use Slim\App;
-use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface as Request;
 use Illuminate\Database\Capsule\Manager as DB;
 
 require_once __DIR__ . '/../middleware/AuthMiddleware.php';
@@ -13,39 +13,47 @@ return function (App $app) {
 
     // Get all zones
     $app->get('/api/zones', function (Request $request, Response $response) {
-        $zones = DB::table('zones')->get();
-        $response->getBody()->write(json_encode($zones));
+        $conn = $GLOBALS['conn'];
+        $sql = 'SELECT * FROM zones';
+        $result = $conn->query($sql);
+        $data = [];
+        while ($row = $result->fetch_assoc()) {
+            $data[] = $row;
+        }
+        $response->getBody()->write(json_encode($data));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     })->add($auth);
 
     // Add a new zone (Admin Only)
     $app->post('/api/zones', function (Request $request, Response $response) {
+        $conn = $GLOBALS['conn'];
         $data = $request->getParsedBody();
 
-        $zoneId = DB::table('zones')->insertGetId([
-            'zone_code' => $data['zone_code'],
-            'zone_name' => $data['zone_name'],
-            'zone_info' => $data['zone_info'],
-            'number_of_booths' => $data['number_of_booths'],
-        ]);
+        $stmt = $conn->prepare('INSERT INTO zones (zone_code, zone_name, zone_info, number_of_booths) VALUES (?, ?, ?, ?)');
+        $stmt->bind_param(
+            "sssi", 
+            $data['zone_code'], 
+            $data['zone_name'], 
+            $data['zone_info'], 
+            $data['number_of_booths']
+        );
+        $stmt->execute();
+        $zoneId = $stmt->insert_id;
 
         $response->getBody()->write(json_encode(['message' => 'สร้างโซนสำเร็จ', 'zone_id' => $zoneId]));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(201);
     })->add($auth)->add($admin);
 
-    // Update a zone (Admin Only)
     $app->put('/api/zones/{zone_id}', function (Request $request, Response $response, array $args) {
         $zoneId = $args['zone_id'];
         $data = $request->getParsedBody();
-
-        $updated = DB::table('zones')->where('zone_id', $zoneId)->update([
-            'zone_code' => $data['zone_code'],
-            'zone_name' => $data['zone_name'],
-            'zone_info' => $data['zone_info'],
-            'number_of_booths' => $data['number_of_booths'],
-        ]);
-
-        if ($updated) {
+        $conn = $GLOBALS['conn'];
+    
+        $stmt = $conn->prepare("UPDATE zones SET zone_code = ?, zone_name = ?, zone_info = ?, number_of_booths = ? WHERE zone_id = ?");
+        $stmt->bind_param("sssii", $data['zone_code'], $data['zone_name'], $data['zone_info'], $data['number_of_booths'], $zoneId);
+        $stmt->execute();
+    
+        if ($stmt->affected_rows > 0) {
             $response->getBody()->write(json_encode(['message' => 'อัปเดตโซนสำเร็จ']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
         } else {
@@ -53,14 +61,16 @@ return function (App $app) {
             return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
         }
     })->add($auth)->add($admin);
-
-    // Delete a zone (Admin Only)
+    
     $app->delete('/api/zones/{zone_id}', function (Request $request, Response $response, array $args) {
         $zoneId = $args['zone_id'];
-
-        $deleted = DB::table('zones')->where('zone_id', $zoneId)->delete();
-
-        if ($deleted) {
+        $conn = $GLOBALS['conn'];
+    
+        $stmt = $conn->prepare("DELETE FROM zones WHERE zone_id = ?");
+        $stmt->bind_param("i", $zoneId);
+        $stmt->execute();
+    
+        if ($stmt->affected_rows > 0) {
             $response->getBody()->write(json_encode(['message' => 'ลบโซนสำเร็จ']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
         } else {

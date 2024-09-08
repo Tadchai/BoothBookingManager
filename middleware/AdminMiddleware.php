@@ -1,18 +1,16 @@
 <?php
 
+use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Server\RequestHandlerInterface as Handler;
-use Psr\Http\Message\ResponseInterface as Response;
 
-class AdminMiddleware
-{
-    public function __invoke(Request $request, Handler $handler): Response
-    {
+class AdminMiddleware {
+    public function __invoke(Request $request, Handler $handler): Response {
         $user = $request->getAttribute('user');
 
-        if ($user->role !== 'admin') {
+        if (!$user || $user->role !== 'admin') {
             $response = new \Slim\Psr7\Response();
-            $response->getBody()->write(json_encode(['error' => 'ต้องเป็นผู้ดูแลระบบเท่านั้น']));
+            $response->getBody()->write(json_encode(['error' => 'Admin access required']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
         }
 
