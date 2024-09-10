@@ -3,22 +3,47 @@
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Server\RequestHandlerInterface as Handler;
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
 
 class AdminMiddleware {
     public function __invoke(Request $request, Handler $handler): Response {
-        // ดึงข้อมูลผู้ใช้จาก request ที่ AuthMiddleware ได้บรรจุไว้
-        $user = $request->getAttribute('user');
-        error_log('Attributes in AdminMiddleware: ' . print_r($request->getAttributes(), true));
-        error_log('user data: ' . print_r($user, true));
+        $authHeader = $request->getHeader('Authorization');
 
-        // ตรวจสอบว่าข้อมูลผู้ใช้ถูกต้องและ role เป็น 'admin'
-        if (!$user || !isset($user->role) || $user->role !== 'admin') {
+        if (!$authHeader || !isset($authHeader[0])) {
             $response = new \Slim\Psr7\Response();
-            $response->getBody()->write(json_encode(['error' => 'Admin access required']));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+            $response->getBody()->write(json_encode(['error' => 'Authorization token not provided']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
         }
 
-        // ส่งต่อ request ไปยัง handler ถ้าผ่านการตรวจสอบ
-        return $handler->handle($request);
+        $token = explode(" ", $authHeader[0])[1];
+
+        if (!$token) {
+            $response = new \Slim\Psr7\Response();
+            $response->getBody()->write(json_encode(['error' => 'Authorization token format is invalid']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+        }
+
+        try {
+            $decoded = JWT::decode($token, new Key('your_secret_key', 'HS256'));
+            if (!isset($decoded->role) || $decoded->role !== 'admin') {
+                $response = new \Slim\Psr7\Response();
+                $response->getBody()->write(json_encode(['error' => 'Admin access required']));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+            }
+            return $handler->handle($request);
+
+        } catch (\Firebase\JWT\ExpiredException $e) {
+            error_log('JWT expired: ' . $e->getMessage());
+            $response = new \Slim\Psr7\Response();
+            $response->getBody()->write(json_encode(['error' => 'Expired token', 'message' => $e->getMessage()]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+
+        } catch (Exception $e) {
+            error_log('JWT decode failed: ' . $e->getMessage());
+            $response = new \Slim\Psr7\Response();
+            $response->getBody()->write(json_encode(['error' => 'Invalid token', 'message' => $e->getMessage()]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+        }
     }
 }
