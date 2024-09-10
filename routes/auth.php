@@ -2,50 +2,51 @@
 use Slim\App;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Message\ResponseInterface as Response;
-use Illuminate\Database\Capsule\Manager as DB;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 
 function generateToken($user) {
-    $key = 'your_secret_key'; // เปลี่ยนเป็นคีย์ลับของคุณ
+    $key = 'your_secret_key'; // ใส่ secret key ของคุณ
     $payload = [
-        'iss' => 'your_domain.com', // issuer
-        'aud' => 'your_domain.com', // audience
-        'iat' => time(), // issued at
-        'exp' => time() + (60 * 60), // expired (1 ชั่วโมง)
-        'userId' => $user['id'], // ข้อมูลผู้ใช้
-        'role' => $user['role'], // บทบาทผู้ใช้
+        'iss' => 'your_domain.com',  // issuer
+        'aud' => 'your_domain.com',  // audience
+        'iat' => time(),             // เวลาออก token
+        'exp' => time() + (60 * 60), // หมดอายุใน 1 ชั่วโมง
+        'userId' => $user['id'],     // user ID
+        'role' => $user['role'],     // บทบาทผู้ใช้
     ];
 
     return JWT::encode($payload, $key, 'HS256');
 }
 
-function decodeToken($jwt) {
-    $key = 'your_secret_key'; // เปลี่ยนเป็นคีย์ลับของคุณ
-    try {
-        $decoded = JWT::decode($jwt, new Key($key, 'HS256'));
-        return (array) $decoded;
-    } catch (Exception $e) {
-        return null; // หากการถอดรหัสล้มเหลว
-    }
-}
-
 return function (App $app) {
-    // Login API
+    // API สำหรับการ Login
     $app->post('/api/login', function (Request $request, Response $response) {
-        $data = $request->getParsedBody();
+        // ดึงข้อมูลจาก body ของ request
+        $rawData = $request->getBody()->getContents();
+        $data = json_decode($rawData, true);
+
+        // ตรวจสอบว่าข้อมูลที่ส่งมาไม่ว่างและมี email/password ครบถ้วน
+        if (is_null($data) || !isset($data['email']) || !isset($data['password'])) {
+            $response->getBody()->write(json_encode(['error' => 'ข้อมูลไม่ครบถ้วน']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
+        // ตรวจสอบ email และ password ในฐานข้อมูล
         $conn = $GLOBALS['conn'];
-        $stmt = $conn->prepare("SELECT * FROM users WHERE email = ? AND password = ?");
-        $stmt->bind_param("ss", $data['email'], $data['password']);
+        $stmt = $conn->prepare("SELECT * FROM users WHERE email = ?");
+        $stmt->bind_param("s", $data['email']);
         $stmt->execute();
         $result = $stmt->get_result();
         $user = $result->fetch_assoc();
-    
-        if ($user) {
-            $token = generateToken($user); // เรียกใช้ฟังก์ชัน generateToken เพื่อสร้าง JWT
+
+        // ถ้าพบผู้ใช้และ password ถูกต้อง
+        if ($user && password_verify($data['password'], $user['password'])) {
+            $token = generateToken($user);  // สร้าง JWT token
             $response->getBody()->write(json_encode(['token' => $token]));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
         } else {
+            // ถ้า email หรือ password ไม่ถูกต้อง
             $response->getBody()->write(json_encode(['error' => 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
         }
@@ -90,5 +91,5 @@ return function (App $app) {
     
         $response->getBody()->write(json_encode(['message' => 'สมัครสมาชิกสำเร็จ']));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(201);
-});
+    });
 };

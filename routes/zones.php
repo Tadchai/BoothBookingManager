@@ -16,10 +16,17 @@ return function (App $app) {
         $conn = $GLOBALS['conn'];
         $sql = 'SELECT * FROM zones';
         $result = $conn->query($sql);
+        
+        if ($result === false) {
+            $response->getBody()->write(json_encode(['error' => 'Database query failed']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+
         $data = [];
         while ($row = $result->fetch_assoc()) {
             $data[] = $row;
         }
+        
         $response->getBody()->write(json_encode($data));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     })->add($auth);
@@ -27,16 +34,23 @@ return function (App $app) {
     // Add a new zone (Admin Only)
     $app->post('/api/zones', function (Request $request, Response $response) {
         $conn = $GLOBALS['conn'];
-        $data = $request->getParsedBody();
+        $rawData = $request->getBody()->getContents();
+        $data = json_decode($rawData, true);
+
+        // ตรวจสอบข้อมูลก่อนทำการบันทึกลงฐานข้อมูล
+        if (!isset($data['zone_code'], $data['zone_name'], $data['zone_info'], $data['number_of_booths'])) {
+            $response->getBody()->write(json_encode(['error' => 'ข้อมูลไม่ครบถ้วน']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
 
         $stmt = $conn->prepare('INSERT INTO zones (zone_code, zone_name, zone_info, number_of_booths) VALUES (?, ?, ?, ?)');
-        $stmt->bind_param(
-            "sssi", 
-            $data['zone_code'], 
-            $data['zone_name'], 
-            $data['zone_info'], 
-            $data['number_of_booths']
-        );
+        
+        if ($stmt === false) {
+            $response->getBody()->write(json_encode(['error' => 'Failed to prepare statement']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+
+        $stmt->bind_param("sssi", $data['zone_code'], $data['zone_name'], $data['zone_info'], $data['number_of_booths']);
         $stmt->execute();
         $zoneId = $stmt->insert_id;
 
@@ -44,12 +58,24 @@ return function (App $app) {
         return $response->withHeader('Content-Type', 'application/json')->withStatus(201);
     })->add($auth)->add($admin);
 
+    // Update zone
     $app->put('/api/zones/{zone_id}', function (Request $request, Response $response, array $args) {
         $zoneId = $args['zone_id'];
         $data = $request->getParsedBody();
         $conn = $GLOBALS['conn'];
     
+        if (!isset($data['zone_code'], $data['zone_name'], $data['zone_info'], $data['number_of_booths'])) {
+            $response->getBody()->write(json_encode(['error' => 'ข้อมูลไม่ครบถ้วน']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
         $stmt = $conn->prepare("UPDATE zones SET zone_code = ?, zone_name = ?, zone_info = ?, number_of_booths = ? WHERE zone_id = ?");
+        
+        if ($stmt === false) {
+            $response->getBody()->write(json_encode(['error' => 'Failed to prepare statement']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+
         $stmt->bind_param("sssii", $data['zone_code'], $data['zone_name'], $data['zone_info'], $data['number_of_booths'], $zoneId);
         $stmt->execute();
     
@@ -62,11 +88,18 @@ return function (App $app) {
         }
     })->add($auth)->add($admin);
     
+    // Delete zone
     $app->delete('/api/zones/{zone_id}', function (Request $request, Response $response, array $args) {
         $zoneId = $args['zone_id'];
         $conn = $GLOBALS['conn'];
     
         $stmt = $conn->prepare("DELETE FROM zones WHERE zone_id = ?");
+        
+        if ($stmt === false) {
+            $response->getBody()->write(json_encode(['error' => 'Failed to prepare statement']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+
         $stmt->bind_param("i", $zoneId);
         $stmt->execute();
     
