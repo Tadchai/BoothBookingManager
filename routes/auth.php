@@ -68,11 +68,13 @@ return function (App $app) {
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
     
-        if (!isset($data['name'], $data['email'], $data['password'], $data['phone_number'])) {
+        // Check required fields
+        if (!isset( $data['first_name'], $data['last_name'], $data['title'], $data['email'], $data['password'], $data['phone_number'])) {
             $response->getBody()->write(json_encode(['error' => 'ข้อมูลไม่ครบถ้วน']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
     
+        // Check if email already exists
         $stmt = $conn->prepare("SELECT * FROM users WHERE email = ?");
         $stmt->bind_param("s", $data['email']);
         $stmt->execute();
@@ -83,13 +85,16 @@ return function (App $app) {
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
     
+        // Hash the password
         $passwordHash = password_hash($data['password'], PASSWORD_DEFAULT);
     
-        $stmt = $conn->prepare("INSERT INTO users (name, email, phone_number, password, role) VALUES (?, ?, ?, ?, 'general')");
-        $stmt->bind_param("ssss", $data['name'], $data['email'], $data['phone_number'], $passwordHash);
+        // Insert into the database
+        $stmt = $conn->prepare("INSERT INTO users (title, first_name, last_name, email, phone_number, password, role) VALUES (?, ?, ?, ?, ?, ?, 'general')");
+        $stmt->bind_param("ssssss", $data['title'], $data['first_name'], $data['last_name'], $data['email'], $data['phone_number'], $passwordHash);
         $stmt->execute();
     
         $response->getBody()->write(json_encode(['message' => 'สมัครสมาชิกสำเร็จ']));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(201);
     });
+    
 };

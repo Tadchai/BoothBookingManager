@@ -19,20 +19,63 @@ return function (App $app) {
         }
         $response->getBody()->write(json_encode($data));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
-    })->add($auth);
+    });
 
     // Add a new booking (User Only)
     $app->post('/api/bookings', function (Request $request, Response $response) {
-        $data = $request->getParsedBody();
+        $rawData = $request->getBody()->getContents();
+        $data = json_decode($rawData, true);
+        //var_dump($data);
+        // ทดสอบการใช้งานข้อมูล
+        if (!isset($data['user_id']) || !isset($data['booth_id'])) {
+            $response->getBody()->write(json_encode(['error' => 'ข้อมูลไม่ครบถ้วน']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+    
         $conn = $GLOBALS['conn'];
-        $stmt = $conn->prepare("INSERT INTO bookings (user_id, booth_id, booking_date) VALUES (?, ?, ?)");
-        $stmt->bind_param("iis", $data['user_id'], $data['booth_id'], $data['booking_date']);
+    
+        // ตรวจสอบว่าผู้ใช้จองบูธไปแล้วกี่บูธ
+        $stmt = $conn->prepare("SELECT COUNT(*) AS total FROM bookings WHERE user_id = ?");
+        $stmt->bind_param("i", $data['user_id']);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result->fetch_assoc();
+        
+        if ($row['total'] >= 4) {
+            $response->getBody()->write(json_encode(['error' => 'จองบูธได้ไม่เกิน 4 บูธ']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+    
+        // เช็คว่าบูธว่างอยู่หรือไม่
+        $stmt = $conn->prepare("SELECT booth_status FROM booths WHERE booth_id = ?");
+        $stmt->bind_param("i", $data['booth_id']);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result->fetch_assoc();
+    
+        if ($row['booth_status'] !== 'available') {
+            $response->getBody()->write(json_encode(['error' => 'บูธนี้ถูกจองแล้ว']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+    
+        // เพิ่มข้อมูลการจอง
+        $stmt = $conn->prepare("INSERT INTO bookings (booking_date, products, booth_id, user_id, event_id) VALUES (CURRENT_TIMESTAMP(), ?, ?, ?, ?)");
+        $stmt->bind_param("siii", $data['products'], $data['booth_id'], $data['user_id'], $data['event_id']);
         $stmt->execute();
         $bookingId = $stmt->insert_id;
-
+    
+        // เปลี่ยนสถานะ booth เป็น under_review
+        $stmt = $conn->prepare("UPDATE booths SET booth_status = 'under_review' WHERE booth_id = ?");
+        $stmt->bind_param("i", $data['booth_id']);
+        $stmt->execute();
+    
+        // ตอบกลับเมื่อจองสำเร็จ
         $response->getBody()->write(json_encode(['message' => 'จองบูธสำเร็จ', 'booking_id' => $bookingId]));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(201);
-    })->add($auth);
+    });
+    
+    
+    
 
     $app->delete('/api/bookings/{booking_id}', function (Request $request, Response $response, array $args) {
         $user = $request->getAttribute('user');
