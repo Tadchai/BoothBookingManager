@@ -8,18 +8,44 @@ return function (App $app) {
     $auth = new AuthMiddleware();
     $admin = new AdminMiddleware();
 
-    // Get all bookings
-    $app->get('/api/bookings', function (Request $request, Response $response) {
+    // Get all bookings by Id
+    $app->get('/api/bookings/{user_id}', function (Request $request, Response $response, array $args) {
+        $userId = $args['user_id'];
         $conn = $GLOBALS['conn'];
-        $sql = 'SELECT * FROM bookings';
-        $result = $conn->query($sql);
-        $data = array();
-        while ($row = $result->fetch_assoc()) {
-            array_push($data, $row);
+
+        // สร้างคำสั่ง SQL และใช้ prepared statement
+        $sql = 'SELECT booths.booth_name, zones.zone_name, booths.price, bookings.status 
+                FROM bookings 
+                JOIN booths ON booths.booth_id = bookings.booth_id 
+                JOIN zones ON zones.zone_id = booths.zone_id 
+                WHERE bookings.user_id = ?';
+
+        $stmt = $conn->prepare($sql);
+        if ($stmt === false) {
+            $response->getBody()->write(json_encode(['error' => 'Failed to prepare statement']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
         }
+
+        // bind ค่า user_id
+        $stmt->bind_param('i', $userId);
+        $stmt->execute();
+
+        $result = $stmt->get_result();
+        $data = array();
+
+        // ตรวจสอบผลลัพธ์และจัดเก็บข้อมูลลง array
+        while ($row = $result->fetch_assoc()) {
+            $data[] = $row;
+        }
+
+        // ปิด statement
+        $stmt->close();
+
+        // ส่งข้อมูลกลับในรูปแบบ JSON
         $response->getBody()->write(json_encode($data));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     });
+
 
     // Add a new booking (User Only)
     $app->post('/api/bookings', function (Request $request, Response $response) {
@@ -31,61 +57,86 @@ return function (App $app) {
             $response->getBody()->write(json_encode(['error' => 'ข้อมูลไม่ครบถ้วน']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
-    
+
         $conn = $GLOBALS['conn'];
-    
+
         // ตรวจสอบว่าผู้ใช้จองบูธไปแล้วกี่บูธ
         $stmt = $conn->prepare("SELECT COUNT(*) AS total FROM bookings WHERE user_id = ?");
         $stmt->bind_param("i", $data['user_id']);
         $stmt->execute();
         $result = $stmt->get_result();
         $row = $result->fetch_assoc();
-        
+
         if ($row['total'] >= 4) {
             $response->getBody()->write(json_encode(['error' => 'จองบูธได้ไม่เกิน 4 บูธ']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
-    
+
         // เช็คว่าบูธว่างอยู่หรือไม่
         $stmt = $conn->prepare("SELECT booth_status FROM booths WHERE booth_id = ?");
         $stmt->bind_param("i", $data['booth_id']);
         $stmt->execute();
         $result = $stmt->get_result();
         $row = $result->fetch_assoc();
-    
+
         if ($row['booth_status'] !== 'available') {
             $response->getBody()->write(json_encode(['error' => 'บูธนี้ถูกจองแล้ว']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
-    
+
         // เพิ่มข้อมูลการจอง
         $stmt = $conn->prepare("INSERT INTO bookings (booking_date, products, booth_id, user_id, event_id) VALUES (CURRENT_TIMESTAMP(), ?, ?, ?, ?)");
         $stmt->bind_param("siii", $data['products'], $data['booth_id'], $data['user_id'], $data['event_id']);
         $stmt->execute();
         $bookingId = $stmt->insert_id;
-    
+
         // เปลี่ยนสถานะ booth เป็น under_review
         $stmt = $conn->prepare("UPDATE booths SET booth_status = 'under_review' WHERE booth_id = ?");
         $stmt->bind_param("i", $data['booth_id']);
         $stmt->execute();
-    
+
         // ตอบกลับเมื่อจองสำเร็จ
         $response->getBody()->write(json_encode(['message' => 'จองบูธสำเร็จ', 'booking_id' => $bookingId]));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(201);
     });
-    
-    
-    
+
+    // Canceled booking (User Only)
+    $app->put('/api/bookings/{booking_id}', function (Request $request, Response $response, array $args) {
+        $conn = $GLOBALS['conn'];
+
+        // อัปเดตสถานะการจองเป็น 'Canceled'
+        $stmt = $conn->prepare("UPDATE bookings SET status = 'Canceled' WHERE booking_id = ?");
+        $stmt->bind_param("i", $args['booking_id']);
+        $stmt->execute();
+
+        // ดึง booth_id จากการจอง
+        $stmt = $conn->prepare("SELECT booth_id FROM bookings WHERE booking_id = ?");
+        $stmt->bind_param("i", $args['booking_id']);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $booking = $result->fetch_assoc();
+
+        if ($booking) {
+            // อัปเดตสถานะบูธเป็น 'available'
+            $stmt = $conn->prepare("UPDATE booths SET booth_status = 'available' WHERE booth_id = ?");
+            $stmt->bind_param("i", $booking['booth_id']);
+            $stmt->execute();
+        }
+
+        // ตอบกลับเมื่อยกเลิกสำเร็จ
+        $response->getBody()->write(json_encode(['message' => 'ยกเลิกการจองบูธสำเร็จ', 'booking_id' => $args['booking_id']]));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    });
 
     $app->delete('/api/bookings/{booking_id}', function (Request $request, Response $response, array $args) {
         $user = $request->getAttribute('user');
         $bookingId = $args['booking_id'];
         $conn = $GLOBALS['conn'];
-        
+
         $stmt = $conn->prepare("DELETE FROM bookings WHERE user_id = ? AND booking_id = ?");
         $stmt->bind_param("ii", $user->id, $bookingId);
         $stmt->execute();
-        
+
         if ($stmt->affected_rows > 0) {
             $response->getBody()->write(json_encode(['message' => 'ยกเลิกการจองสำเร็จ']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);

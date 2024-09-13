@@ -89,7 +89,7 @@ return function (App $app) {
         $passwordHash = password_hash($data['password'], PASSWORD_DEFAULT);
     
         // Insert into the database
-        $stmt = $conn->prepare("INSERT INTO users (title, first_name, last_name, email, phone_number, password, role) VALUES (?, ?, ?, ?, ?, ?, 'general')");
+        $stmt = $conn->prepare("INSERT INTO users (title, first_name, last_name, email, phone_number, password, role) VALUES (?, ?, ?, ?, ?, ?, 'member')");
         $stmt->bind_param("ssssss", $data['title'], $data['first_name'], $data['last_name'], $data['email'], $data['phone_number'], $passwordHash);
         $stmt->execute();
     

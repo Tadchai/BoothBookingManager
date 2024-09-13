@@ -152,4 +152,29 @@ return function (App $app) {
             return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
         }
     });
+
+        // Get all booths (Admin)
+        $app->get('/api/booths', function (Request $request, Response $response) {
+            $conn = $GLOBALS['conn'];
+            $sql = 'SELECT first_name, last_name, zone_name, price, booth_name, booth_status
+            FROM bookings 
+            JOIN users ON users.user_id = bookings.user_id
+            JOIN booths ON booths.booth_id = bookings.booth_id
+            JOIN zones ON zones.zone_id = booths.zone_id ;';
+    
+            $result = $conn->query($sql);
+    
+            if ($result === false) {
+                $response->getBody()->write(json_encode(['error' => 'Database query failed']));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+            }
+    
+            $data = [];
+            while ($row = $result->fetch_assoc()) {
+                $data[] = $row;
+            }
+    
+            $response->getBody()->write(json_encode($data));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        });
 };
