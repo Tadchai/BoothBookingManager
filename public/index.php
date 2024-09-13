@@ -17,7 +17,6 @@ $app->addErrorMiddleware(true, true, true);
 (require __DIR__ . '/../routes/booths.php')($app);
 (require __DIR__ . '/../routes/bookings.php')($app);
 (require __DIR__ . '/../routes/payments.php')($app);
-(require __DIR__ . '/../routes/admin.php')($app);
 (require __DIR__ . '/../routes/events.php')($app);
 (require __DIR__ . '/../routes/users.php')($app);
 

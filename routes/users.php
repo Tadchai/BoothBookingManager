@@ -12,7 +12,7 @@ return function (App $app) {
     $auth = new AuthMiddleware();
     $admin = new AdminMiddleware();
 
-    // Update User
+    // Update User (Member)
     $app->put('/api/users/{first_name}/{last_name}', function (Request $request, Response $response, array $args) {
         $firstName = $args['first_name'];
         $lastName = $args['last_name'];
@@ -116,9 +116,10 @@ return function (App $app) {
             $response->getBody()->write(json_encode(['error' => 'ไม่พบผู้ใช้ที่ต้องการอัปเดต หรือไม่มีการเปลี่ยนแปลง']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
         }
-    });
+    })->add($auth);
 
-    // Get All User
+
+    // Get All User (Admin)
     $app->get('/api/users', function (Request $request, Response $response) {
         $conn = $GLOBALS['conn'];
         $sql = 'SELECT first_name, last_name, phone_number, email FROM users WHERE role ="member"';
@@ -136,9 +137,10 @@ return function (App $app) {
 
         $response->getBody()->write(json_encode($data));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
-    });
+    })->add($auth)->add($admin);
 
-    // Get All User NO Payment
+
+    // Get All User NO Payment (Admin)
     $app->get('/api/users/unpay', function (Request $request, Response $response) {
         $conn = $GLOBALS['conn'];
         $sql = 'SELECT first_name, last_name, phone_number, booth_name, zone_name 
@@ -162,9 +164,10 @@ return function (App $app) {
 
         $response->getBody()->write(json_encode($data));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
-    });
+    })->add($auth)->add($admin);
 
-    // Get All User Payment
+
+    // Get All User Payment (Admin)
     $app->get('/api/users/pay', function (Request $request, Response $response) {
         $conn = $GLOBALS['conn'];
         $sql = 'SELECT first_name, last_name, phone_number, booth_name, zone_name 
@@ -188,9 +191,10 @@ return function (App $app) {
 
         $response->getBody()->write(json_encode($data));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
-    });
+    })->add($auth)->add($admin);
 
-    // Get All User under_review
+
+    // Get All User under_review (Admin)
     $app->get('/api/users/under_review', function (Request $request, Response $response) {
         $conn = $GLOBALS['conn'];
         $sql = 'SELECT first_name, last_name, phone_number, booth_name, zone_name 
@@ -214,5 +218,5 @@ return function (App $app) {
 
         $response->getBody()->write(json_encode($data));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
-    });
+    })->add($auth)->add($admin);
 };

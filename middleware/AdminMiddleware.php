@@ -6,8 +6,10 @@ use Psr\Http\Server\RequestHandlerInterface as Handler;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 
-class AdminMiddleware {
-    public function __invoke(Request $request, Handler $handler): Response {
+class AdminMiddleware
+{
+    public function __invoke(Request $request, Handler $handler): Response
+    {
         $authHeader = $request->getHeader('Authorization');
 
         if (!$authHeader || !isset($authHeader[0])) {
@@ -32,13 +34,11 @@ class AdminMiddleware {
                 return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
             }
             return $handler->handle($request);
-
         } catch (\Firebase\JWT\ExpiredException $e) {
             error_log('JWT expired: ' . $e->getMessage());
             $response = new \Slim\Psr7\Response();
             $response->getBody()->write(json_encode(['error' => 'Expired token', 'message' => $e->getMessage()]));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
-
         } catch (Exception $e) {
             error_log('JWT decode failed: ' . $e->getMessage());
             $response = new \Slim\Psr7\Response();

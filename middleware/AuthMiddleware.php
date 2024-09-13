@@ -6,8 +6,10 @@ use Psr\Http\Server\RequestHandlerInterface as Handler;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 
-class AuthMiddleware {
-    public function __invoke(Request $request, Handler $handler): Response {
+class AuthMiddleware
+{
+    public function __invoke(Request $request, Handler $handler): Response
+    {
         // ดึง Authorization Header
         $authHeader = $request->getHeader('Authorization');
         error_log('Authorization Header in AuthMiddleware: ' . print_r($authHeader, true));
@@ -33,10 +35,9 @@ class AuthMiddleware {
         try {
             $decoded = JWT::decode($token, new Key('your_secret_key', 'HS256'));
             error_log('Decoded data in AuthMiddleware: ' . print_r($decoded, true));
-            
+
             // ถ้า decode สำเร็จ ส่งต่อ request ไปยัง handler
             return $handler->handle($request);
-
         } catch (Exception $e) {
             error_log('JWT decode failed in AuthMiddleware: ' . $e->getMessage());
             $response = new \Slim\Psr7\Response();
