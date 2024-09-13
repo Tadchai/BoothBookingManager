@@ -1,4 +1,5 @@
 <?php
+
 use Slim\App;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Message\ResponseInterface as Response;
@@ -14,7 +15,7 @@ return function (App $app) {
         $conn = $GLOBALS['conn'];
 
         // สร้างคำสั่ง SQL และใช้ prepared statement
-        $sql = 'SELECT booths.booth_name, zones.zone_name, booths.price, bookings.status 
+        $sql = 'SELECT booths.booth_name, zones.zone_name, bookings.payment_price, bookings.status 
                 FROM bookings 
                 JOIN booths ON booths.booth_id = bookings.booth_id 
                 JOIN zones ON zones.zone_id = booths.zone_id 
@@ -61,7 +62,7 @@ return function (App $app) {
         $conn = $GLOBALS['conn'];
 
         // ตรวจสอบว่าผู้ใช้จองบูธไปแล้วกี่บูธ
-        $stmt = $conn->prepare("SELECT COUNT(*) AS total FROM bookings WHERE user_id = ?");
+        $stmt = $conn->prepare("SELECT COUNT(*) AS total FROM bookings WHERE user_id = ? AND status != 'canceled'");
         $stmt->bind_param("i", $data['user_id']);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -100,6 +101,68 @@ return function (App $app) {
         return $response->withHeader('Content-Type', 'application/json')->withStatus(201);
     });
 
+    // Approve Booking
+    $app->put('/api/bookings/approve/{booking_id}', function (Request $request, Response $response, array $args) {
+        $bookingId = $args['booking_id'];
+        $conn = $GLOBALS['conn'];
+    
+        // ตรวจสอบสถานะการจอง
+        $sql = 'SELECT status, booth_id FROM bookings WHERE booking_id = ?';
+        $stmt = $conn->prepare($sql);
+    
+        if ($stmt === false) {
+            $response->getBody()->write(json_encode(['error' => 'Failed to prepare statement']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    
+        // Bind booking_id
+        $stmt->bind_param('i', $bookingId);
+        $stmt->execute();
+    
+        $result = $stmt->get_result();
+        $booking = $result->fetch_assoc();
+    
+        if (!$booking) {
+            $response->getBody()->write(json_encode(['error' => 'ไม่พบข้อมูลการจอง']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
+        }
+    
+        // เช็คสถานะการชำระเงิน
+        if ($booking['status'] !== 'payment') {
+            $response->getBody()->write(json_encode(['error' => 'สถานะการจองยังไม่ถูกชำระเงิน']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+    
+        // เปลี่ยนสถานะเป็น "approve"
+        $sqlUpdate = 'UPDATE bookings SET status = "approve" WHERE booking_id = ?';
+        $stmtUpdate = $conn->prepare($sqlUpdate);
+    
+        if ($stmtUpdate === false) {
+            $response->getBody()->write(json_encode(['error' => 'Failed to prepare update statement']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    
+        $stmtUpdate->bind_param('i', $bookingId);
+        $stmtUpdate->execute();
+    
+        // เปลี่ยนสถานะบูธเป็น "booked"
+        $boothId = $booking['booth_id'];
+        $sqlFinalize = 'UPDATE booths SET booth_status = "booked" WHERE booth_id = ?';
+        $stmtFinalize = $conn->prepare($sqlFinalize);
+    
+        if ($stmtFinalize === false) {
+            $response->getBody()->write(json_encode(['error' => 'Failed to prepare finalize statement']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    
+        $stmtFinalize->bind_param('i', $boothId);
+        $stmtFinalize->execute();
+    
+        // ส่งการตอบกลับ
+        $response->getBody()->write(json_encode(['message' => 'การจองอนุมัติและเปลี่ยนเป็นจองแล้วสำเร็จ']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    });
+    
     // Canceled booking (User Only)
     $app->put('/api/bookings/{booking_id}', function (Request $request, Response $response, array $args) {
         $conn = $GLOBALS['conn'];

@@ -28,7 +28,7 @@ return function (App $app) {
         $conn = $GLOBALS['conn'];
     
         // ดึงข้อมูลวันจัดงานจากการจอง
-        $stmt = $conn->prepare("SELECT date_end FROM events WHERE event_id = ?");
+        $stmt = $conn->prepare("SELECT date FROM events WHERE event_id = ?");
         $stmt->bind_param("i", $data['event_id']);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -41,7 +41,7 @@ return function (App $app) {
     
         // ตรวจสอบจำนวนวันก่อนวันจัดงาน
         $today = new DateTime();
-        $eventDate = new DateTime($event['date_end']);
+        $eventDate = new DateTime($event['date']);
         $interval = $today->diff($eventDate)->days;
     
         if ($interval < 5) {
@@ -68,8 +68,8 @@ return function (App $app) {
         } else {
             // ถ้าวันก่อนงานมากกว่าหรือเท่ากับ 5 วัน ชำระเงินตามปกติ    
             // อัปเดตสถานะการจองเป็น 'ชำระเงิน'
-            $stmt = $conn->prepare("UPDATE bookings SET payment_date = CURRENT_TIMESTAMP(), payment_status = 'paid', payment_slip = ?, status = 'booked' WHERE booking_id = ?");
-            $stmt->bind_param("si",$data['payment_slip'], $data['booking_id']);
+            $stmt = $conn->prepare("UPDATE bookings SET payment_date = CURRENT_TIMESTAMP(), status = 'payment', payment_slip = ?, payment_price = ? WHERE booking_id = ?");
+            $stmt->bind_param("sii",$data['payment_slip'],$data['payment_price'], $data['booking_id']);
             $stmt->execute();
     
             // ดึง booth_id จากการจอง

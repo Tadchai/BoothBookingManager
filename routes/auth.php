@@ -12,7 +12,7 @@ function generateToken($user) {
         'aud' => 'your_domain.com',  // audience
         'iat' => time(),             // เวลาออก token
         'exp' => time() + (60 * 60), // หมดอายุใน 1 ชั่วโมง
-        'userId' => $user['id'],     // user ID
+        'userId' => $user['user_id'],     // user ID
         'role' => $user['role'],     // บทบาทผู้ใช้
     ];
 

@@ -161,18 +161,18 @@ return function (App $app) {
     // })->add($auth)->add($admin);
     
     // Delete zone
-    $app->delete('/api/zones/{zone_id}', function (Request $request, Response $response, array $args) {
-        $zoneId = $args['zone_id'];
+    $app->delete('/api/zones/{zone_name}', function (Request $request, Response $response, array $args) {
+        $zonename = $args['zone_name'];
         $conn = $GLOBALS['conn'];
     
-        $stmt = $conn->prepare("DELETE FROM zones WHERE zone_id = ?");
+        $stmt = $conn->prepare("DELETE FROM zones WHERE zone_name = ?");
         
         if ($stmt === false) {
             $response->getBody()->write(json_encode(['error' => 'Failed to prepare statement']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
         }
 
-        $stmt->bind_param("i", $zoneId);
+        $stmt->bind_param("s", $zonename);
         $stmt->execute();
     
         if ($stmt->affected_rows > 0) {

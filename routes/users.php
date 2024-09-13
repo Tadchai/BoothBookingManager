@@ -146,7 +146,7 @@ return function (App $app) {
                 JOIN users ON users.user_id = bookings.user_id
                 JOIN booths ON booths.booth_id = bookings.booth_id
                 JOIN zones ON zones.zone_id = booths.zone_id
-                WHERE payment_status = "pending" AND status = "waiting";';
+                WHERE  status = "reserve";';
 
         $result = $conn->query($sql);
 
@@ -172,7 +172,7 @@ return function (App $app) {
                     JOIN users ON users.user_id = bookings.user_id
                     JOIN booths ON booths.booth_id = bookings.booth_id
                     JOIN zones ON zones.zone_id = booths.zone_id
-                    WHERE payment_status = "paid";';
+                    WHERE status = "payment";';
 
         $result = $conn->query($sql);
 
@@ -190,15 +190,15 @@ return function (App $app) {
         return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     });
 
-    // Get All User Waiting
-    $app->get('/api/users/wait', function (Request $request, Response $response) {
+    // Get All User under_review
+    $app->get('/api/users/under_review', function (Request $request, Response $response) {
         $conn = $GLOBALS['conn'];
         $sql = 'SELECT first_name, last_name, phone_number, booth_name, zone_name 
         FROM bookings 
         JOIN users ON users.user_id = bookings.user_id
         JOIN booths ON booths.booth_id = bookings.booth_id
         JOIN zones ON zones.zone_id = booths.zone_id
-        WHERE booth_status = "under_review";';
+        WHERE booth_status = "under_review" AND status != "canceled";';
 
         $result = $conn->query($sql);
 
