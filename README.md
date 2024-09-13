@@ -5,7 +5,7 @@ BoothBookingManager is a PHP-based application designed for managing booth reser
 
 ## Features
 
-General Users:
+Member:
 - Registration and Login: Users can create an account and log in using their email and password.
 - View Booths and Zones: Users can browse available booths and zones for a specific event.
 - Make a Reservation: Users can reserve booths and receive a booking confirmation.
