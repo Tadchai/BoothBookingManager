@@ -162,6 +162,42 @@ return function (App $app) {
         $response->getBody()->write(json_encode($data));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     })->add($auth)->add($admin);
+
+    // Get all booths by zone_Id (Member)
+    $app->get('/api/booths/{zone_id}', function (Request $request, Response $response, array $args) {
+        $zoneId = $args['zone_id'];
+        $conn = $GLOBALS['conn'];
+
+        // สร้างคำสั่ง SQL และใช้ prepared statement
+        $sql = 'SELECT booth_id, booth_name, booth_size, booth_products, booth_status, price
+                    FROM booths 
+                WHERE zone_id = ?';
+
+        $stmt = $conn->prepare($sql);
+        if ($stmt === false) {
+            $response->getBody()->write(json_encode(['error' => 'Failed to prepare statement']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+
+        // bind ค่า zone_id
+        $stmt->bind_param('i', $zoneId);
+        $stmt->execute();
+
+        $result = $stmt->get_result();
+        $data = array();
+
+        // ตรวจสอบผลลัพธ์และจัดเก็บข้อมูลลง array
+        while ($row = $result->fetch_assoc()) {
+            $data[] = $row;
+        }
+
+        // ปิด statement
+        $stmt->close();
+
+        // ส่งข้อมูลกลับในรูปแบบ JSON
+        $response->getBody()->write(json_encode($data));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    })->add($auth);
 };
 
     // $app->put('/api/booths/{booth_id}', function (Request $request, Response $response, array $args) {

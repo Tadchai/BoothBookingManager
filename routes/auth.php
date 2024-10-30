@@ -46,7 +46,7 @@ return function (App $app) {
         // ถ้าพบผู้ใช้และ password ถูกต้อง
         if ($user && password_verify($data['password'], $user['password'])) {
             $token = generateToken($user);  // สร้าง JWT token
-            $response->getBody()->write(json_encode(['token' => $token]));
+            $response->getBody()->write(json_encode(['token' => $token,'user' => $user]));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
         } else {
             // ถ้า email หรือ password ไม่ถูกต้อง
